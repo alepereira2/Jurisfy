@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id                   String              @id @default(cuid())
+  nome                 String
+  email                String              @unique
+  senhaHash            String
+  role                 String              @default("CUSTOM") // MASTER | CUSTOM
+  ativo                Boolean             @default(true)
+  limiteValorAprovacao Float? // Alçada monetária máxima se customizado
+  centroCustoId        String? // Centro de custo vinculado para restrição
+  criadoEm             DateTime            @default(now())
+  atualizadoEm         DateTime            @updatedAt
+
+  centroCusto          CentroCusto?        @relation(fields: [centroCustoId], references: [id])
+  autenticacoes2fa     Autenticacao2FA[]
+  permissoes           PermissaoUsuario[]
+  logs                 LogAuditoria[]
+
+  @@map("usuarios")
+}
+
+model Autenticacao2FA {
+  id         String   @id @default(cuid())
+  usuarioId  String
+  codigoOtp  String
+  expiracao  DateTime
+  utilizado  Boolean  @default(false)
+  criadoEm   DateTime @default(now())
+
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, codigoOtp, utilizado])
+  @@map("autenticacao_2fa")
+}
+
+model PermissaoUsuario {
+  id                   String       @id @default(cuid())
+  usuarioId            String
+  centroCustoId        String?
+  limiteValorAprovacao Float?
+  modulo               String // PAGAR | RECEBER | CONCILIACAO | RELATORIOS | DRE | BI | USUARIOS | CONTAS
+  podeLer              Boolean      @default(true)
+  podeEscrever         Boolean      @default(false)
+  podeDeletar          Boolean      @default(false)
+  podeAprovar          Boolean      @default(false)
+  podeExportar         Boolean      @default(false)
+
+  usuario              Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  centroCusto          CentroCusto? @relation(fields: [centroCustoId], references: [id])
+
+  @@unique([usuarioId, modulo])
+  @@map("permissoes_usuario")
+}
+
+model CentroCusto {
+  id         String   @id @default(cuid())
+  codigo     String   @unique
+  nome       String
+  descricao  String?
+  ativo      Boolean  @default(true)
+  criadoEm   DateTime @default(now())
+
+  usuarios   Usuario[]
+  permissoes PermissaoUsuario[]
+  lancamentos LancamentoFinanceiro[]
+  rateios    RateioLancamento[]
+
+  @@map("centros_custo")
+}
+
+model CategoriaPlanoContas {
+  id             String                 @id @default(cuid())
+  codigo         String                 @unique
+  nome           String
+  tipo           String // RECEITA | DESPESA | CUSTO
+  categoriaPaiId String?
+  grupoDre       String // RECEITA_BRUTA | DEDUCOES_IMPOSTOS | CUSTO_DIRETO | DESPESA_OPERACIONAL | RESULTADO_FINANCEIRO
+  ativo          Boolean                @default(true)
+
+  categoriaPai   CategoriaPlanoContas?  @relation("HierarquiaCategorias", fields: [categoriaPaiId], references: [id])
+  subcategorias  CategoriaPlanoContas[] @relation("HierarquiaCategorias")
+  lancamentos    LancamentoFinanceiro[]
+  rateios        RateioLancamento[]
+
+  @@map("categorias_plano_contas")
+}
+
+model ClienteProcesso {
+  id                  String                 @id @default(cuid())
+  nomeCliente         String
+  cpfCnpj             String?
+  email               String?
+  telefone            String?
+  numeroProcesso      String?
+  areaAtuacao         String? // Trabalhista, Cível, Tributário, etc.
+  advogadoResponsavel String?
+  ativo               Boolean                @default(true)
+  criadoEm            DateTime               @default(now())
+
+  lancamentos         LancamentoFinanceiro[]
+
+  @@map("clientes_processos")
+}
+
+model ContaBancaria {
+  id                     String                 @id @default(cuid())
+  nomeBanco              String
+  agencia                String?
+  conta                  String?
+  tipo                   String                 @default("CORRENTE") // CORRENTE | APLICACAO | CAIXA
+  saldoInicial           Float                  @default(0)
+  saldoAtual             Float                  @default(0)
+  fechamentoDataBloqueio DateTime?
+  ativo                  Boolean                @default(true)
+  criadoEm               DateTime               @default(now())
+
+  lancamentos            LancamentoFinanceiro[]
+  extratos               ExtratoBancario[]
+
+  @@map("contas_bancarias")
+}
+
+model LancamentoFinanceiro {
+  id                    String                @id @default(cuid())
+  tipo                  String // PAGAR | RECEBER
+  titulo                String
+  descricao             String?
+  valor                 Float
+  dataCompetencia       DateTime // Fato Gerador (Competência)
+  dataVencimento        DateTime
+  dataPagamento         DateTime? // Liquidação efetiva (Caixa)
+  status                String                @default("PENDENTE") // PREVISTO | PENDENTE | EM_APROVACAO | PAGO | CANCELADO | ATRASADO
+  fornecedorOuCliente   String?
+  numeroDocumento       String?
+  ehReembolsavel        Boolean               @default(false)
+  reembolsado           Boolean               @default(false)
+  valorJuros            Float                 @default(0)
+  valorMulta            Float                 @default(0)
+  valorDesconto         Float                 @default(0)
+  retencaoIss           Float                 @default(0)
+  retencaoIrrf          Float                 @default(0)
+  retencaoPisCofinsCsll Float                 @default(0)
+  valorLiquido          Float
+  aprovadoPor           String?
+  aprovadoEm            DateTime?
+  criadoPor             String?
+  criadoEm              DateTime              @default(now())
+  atualizadoEm          DateTime              @updatedAt
+
+  contaBancariaId       String?
+  clienteProcessoId     String?
+  categoriaId           String
+  centroCustoId         String
+
+  contaBancaria         ContaBancaria?        @relation(fields: [contaBancariaId], references: [id])
+  clienteProcesso       ClienteProcesso?      @relation(fields: [clienteProcessoId], references: [id])
+  categoria             CategoriaPlanoContas  @relation(fields: [categoriaId], references: [id])
+  centroCusto           CentroCusto           @relation(fields: [centroCustoId], references: [id])
+  rateios               RateioLancamento[]
+  conciliacoes          Conciliacao[]
+
+  @@index([tipo, status, dataVencimento])
+  @@index([dataCompetencia])
+  @@index([dataPagamento])
+  @@map("lancamentos_financeiros")
+}
+
+model RateioLancamento {
+  id            String               @id @default(cuid())
+  lancamentoId  String
+  centroCustoId String
+  categoriaId   String
+  percentual    Float
+  valor         Float
+
+  lancamento    LancamentoFinanceiro @relation(fields: [lancamentoId], references: [id], onDelete: Cascade)
+  centroCusto   CentroCusto          @relation(fields: [centroCustoId], references: [id])
+  categoria     CategoriaPlanoContas @relation(fields: [categoriaId], references: [id])
+
+  @@map("rateios_lancamento")
+}
+
+model ExtratoBancario {
+  id               String         @id @default(cuid())
+  contaBancariaId  String
+  fitId            String
+  dataTransacao    DateTime
+  descricao        String
+  valor            Float
+  tipo             String // CREDIT | DEBIT
+  numeroDocumento  String?
+  statusConciliado Boolean        @default(false)
+  criadoEm         DateTime       @default(now())
+
+  contaBancaria    ContaBancaria  @relation(fields: [contaBancariaId], references: [id], onDelete: Cascade)
+  conciliacao      Conciliacao?
+
+  @@unique([contaBancariaId, fitId])
+  @@index([dataTransacao, valor])
+  @@map("extratos_bancarios")
+}
+
+model Conciliacao {
+  id               String               @id @default(cuid())
+  extratoId        String               @unique
+  lancamentoId     String
+  conciliadoPor    String?
+  dataConciliacao  DateTime             @default(now())
+  observacao       String?
+
+  extrato          ExtratoBancario      @relation(fields: [extratoId], references: [id], onDelete: Cascade)
+  lancamento       LancamentoFinanceiro @relation(fields: [lancamentoId], references: [id], onDelete: Cascade)
+
+  @@map("conciliacoes")
+}
+
+model LogAuditoria {
+  id           String    @id @default(cuid())
+  usuarioId    String?
+  usuarioEmail String?
+  acao         String // CRIACAO | EDICAO | EXCLUSAO | APROVACAO | CONCILIACAO | LOGIN | 2FA
+  modulo       String
+  registroId   String?
+  detalhes     String? // JSON text
+  ip           String?
+  timestamp    DateTime  @default(now())
+
+  usuario      Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([modulo, timestamp])
+  @@map("logs_auditoria")
+}
