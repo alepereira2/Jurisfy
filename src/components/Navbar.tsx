@@ -38,7 +38,11 @@ export const Navbar = () => {
   const [relatoriosOpen, setRelatoriosOpen] = useState(false);
 
   useEffect(() => {
-    fetch('/api/auth/me')
+    const token = typeof window !== 'undefined' ? localStorage.getItem('jurisfy_session') : null;
+    const headers: Record<string, string> = {};
+    if (token) headers['x-jurisfy-token'] = token;
+
+    fetch('/api/auth/me', { headers })
       .then((res) => {
         if (!res.ok) {
           if (pathname !== '/login') router.push('/login');
@@ -55,8 +59,10 @@ export const Navbar = () => {
   }, [pathname, router]);
 
   const handleLogout = async () => {
+    localStorage.removeItem('jurisfy_session');
+    document.cookie = 'jurisfy_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     await fetch('/api/auth/logout', { method: 'POST' });
-    router.push('/login');
+    window.location.href = '/login';
   };
 
   const navLinks = [

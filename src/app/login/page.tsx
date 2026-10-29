@@ -1,12 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Scale, Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Scale, Lock, Mail, ShieldCheck, ArrowRight, AlertCircle, RefreshCw, CheckCircle2, Zap } from 'lucide-react';
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [step, setStep] = useState<'LOGIN' | '2FA'>('LOGIN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,12 +15,38 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<string | null>(null);
 
-  // Seletores rápidos de credenciais de teste para demonstração imediata
   const preencherCredenciais = (e: string, p: string) => {
     setEmail(e);
     setPassword(p);
   };
 
+  // Login Direto de 1 Clique (Bypass ágil para demonstração das alçadas)
+  const handleDemoLogin = async (demoEmail: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/demo-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: demoEmail }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro no login de demonstração');
+
+      if (data.token) {
+        localStorage.setItem('jurisfy_session', data.token);
+        document.cookie = `jurisfy_session=${data.token}; path=/; max-age=86400`;
+      }
+
+      window.location.href = '/';
+    } catch (err: any) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  // Submissão de E-mail e Senha (Passo 1)
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -44,6 +67,7 @@ export default function LoginPage() {
 
       setUsuarioId(data.usuarioId);
       setOtpDebug(data.otpDebug);
+      setOtp(data.otpDebug || ''); // Já preenche o OTP automaticamente para facilitar o teste!
       setMensagem(data.message);
       setStep('2FA');
     } catch (err: any) {
@@ -53,6 +77,7 @@ export default function LoginPage() {
     }
   };
 
+  // Validação do OTP de 6 dígitos (Passo 2)
   const handle2FASubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -70,10 +95,14 @@ export default function LoginPage() {
         throw new Error(data.error || 'Código 2FA inválido');
       }
 
-      router.push('/');
+      if (data.token) {
+        localStorage.setItem('jurisfy_session', data.token);
+        document.cookie = `jurisfy_session=${data.token}; path=/; max-age=86400`;
+      }
+
+      window.location.href = '/';
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -149,30 +178,55 @@ export default function LoginPage() {
                 Continuar para Verificação 2FA
               </button>
 
-              {/* Contas de Demonstração pré-configuradas */}
+              {/* Botões de Acesso Rápido de 1 Clique */}
               <div className="pt-4 border-t border-slate-100 text-[11px] text-slate-500">
-                <p className="font-semibold text-slate-700 mb-2">Acesso Rápido para Demonstração:</p>
+                <p className="font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-amber-500" /> Acesso Imediato (1 Clique):
+                </p>
                 <div className="flex flex-col gap-1.5">
                   <button
                     type="button"
-                    onClick={() => preencherCredenciais('master@jurisfy.com.br', 'Senha@123456')}
-                    className="text-left p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+                    onClick={() => handleDemoLogin('master@jurisfy.com.br')}
+                    disabled={loading}
+                    className="text-left p-2.5 rounded-xl bg-amber-50/70 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center justify-between group"
                   >
-                    <span className="font-bold text-slate-800">1. Administrador Master:</span> master@jurisfy.com.br
+                    <div>
+                      <span className="font-bold text-slate-900 block">👑 Administrador Master</span>
+                      <span className="text-[10px] text-slate-500">Acesso ilimitado a todas as áreas e valores</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-200/60 px-2 py-0.5 rounded-md group-hover:scale-105 transition-transform">
+                      Entrar
+                    </span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => preencherCredenciais('carlos@jurisfy.com.br', 'Senha@123456')}
-                    className="text-left p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+                    onClick={() => handleDemoLogin('carlos@jurisfy.com.br')}
+                    disabled={loading}
+                    className="text-left p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors flex items-center justify-between group"
                   >
-                    <span className="font-bold text-slate-800">2. Sócio Gestor (Alçada R$ 25k):</span> carlos@jurisfy.com.br
+                    <div>
+                      <span className="font-bold text-slate-900 block">⚖️ Dr. Carlos (Sócio Gestor)</span>
+                      <span className="text-[10px] text-slate-500">Alçada de R$ 25k • Tributário</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-md group-hover:scale-105 transition-transform">
+                      Entrar
+                    </span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() => preencherCredenciais('financeiro@jurisfy.com.br', 'Senha@123456')}
-                    className="text-left p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
+                    onClick={() => handleDemoLogin('financeiro@jurisfy.com.br')}
+                    disabled={loading}
+                    className="text-left p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors flex items-center justify-between group"
                   >
-                    <span className="font-bold text-slate-800">3. Financeiro Pleno (Alçada R$ 3k):</span> financeiro@jurisfy.com.br
+                    <div>
+                      <span className="font-bold text-slate-900 block">💼 Juliana (Financeiro Pleno)</span>
+                      <span className="text-[10px] text-slate-500">Alçada de R$ 3k • Administrativo</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-2 py-0.5 rounded-md group-hover:scale-105 transition-transform">
+                      Entrar
+                    </span>
                   </button>
                 </div>
               </div>
@@ -198,13 +252,9 @@ export default function LoginPage() {
                   <span className="text-xl font-mono font-extrabold text-amber-900 tracking-widest">
                     {otpDebug}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setOtp(otpDebug)}
-                    className="block mx-auto mt-1 text-[11px] font-semibold text-amber-800 underline hover:text-amber-950"
-                  >
-                    Preencher automaticamente
-                  </button>
+                  <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                    ✓ Código já pré-preenchido no campo abaixo!
+                  </p>
                 </div>
               )}
 

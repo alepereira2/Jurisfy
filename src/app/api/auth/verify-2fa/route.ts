@@ -48,11 +48,12 @@ export async function POST(req: NextRequest) {
 
     const sessionString = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
 
-    // Define cookie de sessão HTTP-only
+    // Define cookie de sessão - somente seguro em conexões HTTPS
+    const isHttps = req.nextUrl.protocol === 'https:';
     const cookieStore = await cookies();
     cookieStore.set('jurisfy_session', sessionString, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      httpOnly: false,
+      secure: isHttps,
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24, // 24 horas
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       user: usuario,
+      token: sessionString,
       message: 'Autenticação 2FA confirmada com sucesso!',
     });
   } catch (error: any) {
