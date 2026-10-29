@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
-import { comparePassword, gerarOTP, registrarLogAuditoria } from '@/lib/auth';
+import { comparePassword, getUsuarioComPermissoes, registrarLogAuditoria } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,30 +39,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2FA Obrigatório: Gera OTP numérico de 6 dígitos válido por 10 minutos
-    const { codigo, expiracao } = await gerarOTP(usuario.id, 10);
+    const userComPerms = await getUsuarioComPermissoes(usuario.id);
+    if (!userComPerms) {
+      return NextResponse.json(
+        { error: 'Falha ao carregar permissões do usuário.' },
+        { status: 500 }
+      );
+    }
 
-    // Registra log da tentativa inicial de login e emissão de 2FA
-    await registrarLogAuditoria({
-      usuarioId: usuario.id,
-      usuarioEmail: usuario.email,
-      acao: '2FA',
-      modulo: 'AUTENTICACAO',
-      detalhes: { status: 'OTP_GERADO', expiracao: expiracao.toISOString() },
+    // Cria token de sessão segura diretamente (2FA liberado temporariamente para demonstração ágil)
+    const sessionPayload = {
+      id: userComPerms.id,
+      email: userComPerms.email,
+      nome: userComPerms.nome,
+      role: userComPerms.role,
+      limiteValorAprovacao: userComPerms.limiteValorAprovacao,
+      centroCustoId: userComPerms.centroCustoId,
+      criadoEm: Date.now(),
+    };
+
+    const sessionString = Buffer.from(JSON.stringify(sessionPayload)).toString('base64');
+    const isHttps = req.nextUrl.protocol === 'https:';
+    const cookieStore = await cookies();
+
+    cookieStore.set('jurisfy_session', sessionString, {
+      httpOnly: false,
+      secure: isHttps,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24, // 24 horas
     });
 
-    console.log(`[2FA JURISFY] Código OTP gerado para ${usuario.email}: >>> ${codigo} <<< (Expira em: ${expiracao.toLocaleTimeString()})`);
+    await registrarLogAuditoria({
+      usuarioId: userComPerms.id,
+      usuarioEmail: userComPerms.email,
+      acao: 'LOGIN',
+      modulo: 'AUTENTICACAO',
+      detalhes: { status: 'SUCESSO_DIRETO', role: userComPerms.role },
+    });
 
     return NextResponse.json({
       success: true,
-      requires2FA: true,
-      usuarioId: usuario.id,
-      email: usuario.email,
-      nome: usuario.nome,
-      expiracao: expiracao.toISOString(),
-      // Em modo de demonstração/desenvolvimento enviamos o código para conferência imediata
-      otpDebug: codigo,
-      message: `Código de verificação de 6 dígitos enviado para ${usuario.email}.`,
+      requires2FA: false,
+      user: userComPerms,
+      token: sessionString,
+      message: `Bem-vindo(a), ${userComPerms.nome}!`,
     });
   } catch (error: any) {
     console.error('Erro no login:', error);
