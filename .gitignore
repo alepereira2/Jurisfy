@@ -43,6 +43,7 @@ next-env.d.ts
 # prisma local database
 *.db
 *.db-journal
+!prisma/jurisfy-seed.sqlite
 
 # agent caches
 .agents/

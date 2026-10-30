@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { getUsuarioComPermissoes, registrarLogAuditoria } from '@/lib/auth';
+import { ensureDatabaseSeeded } from '@/lib/auto-seed';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,6 +11,9 @@ export async function POST(req: NextRequest) {
     if (!email) {
       return NextResponse.json({ error: 'E-mail é obrigatório.' }, { status: 400 });
     }
+
+    // Garante que o banco no /tmp da Vercel contenha os dados de demonstração
+    await ensureDatabaseSeeded();
 
     const usuario = await prisma.usuario.findUnique({
       where: { email: email.toLowerCase().trim() },
@@ -64,6 +68,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Erro no demo login:', error);
-    return NextResponse.json({ error: 'Erro interno ao realizar login de demonstração.' }, { status: 500 });
+    return NextResponse.json({ error: `Erro no login: ${error.message || 'Verifique o banco de dados.'}` }, { status: 500 });
   }
 }
